@@ -59,16 +59,19 @@ spec:
       operation: INSERT_BEFORE
       value: # grpc-json filter specification
         name: envoy.grpc_json_transcoder
-        typed_config:
+        typed_config: # https://www.envoyproxy.io/docs/envoy/latest/api-v2/config/filter/http/transcoder/v2/transcoder.proto#envoy-api-msg-config-filter-http-transcoder-v2-grpcjsontranscoder
           "@type": type.googleapis.com/envoy.config.filter.http.transcoder.v2.GrpcJsonTranscoder
+          # proto_descriptor: where envoy sidecar could locate this file.
           proto_descriptor_bin: {{ .DescriptorBinary }}
           services: {{ range .ProtoServices }}
           - {{ . }}{{end}}
+          match_incoming_request_route: true
           ignore_unknown_query_parameters: true
-          convert_grpc_status: true
-          auto_mapping: true
+          ignored_query_parameters: []
+          convert_grpc_status: {{ .ConvertGRPCStatus }}
+          auto_mapping: false
           print_options:
-            add_whitespace: true
+            add_whitespace: {{ .AddWhiteSpace }}
             always_print_primitive_fields: true
             always_print_enums_as_ints: false
             preserve_proto_field_names: false
@@ -140,6 +143,8 @@ func main() {
 		protoServices      []string
 		descriptorFilePath string
 		port               int
+		addWhiteSpace      bool
+		converGRPCStatus bool
 	)
 
 	cmd := &cobra.Command{
@@ -174,6 +179,8 @@ func main() {
 				"PortNumber":       port,
 				"DescriptorBinary": encoded,
 				"ProtoServices":    protoServices,
+				"AddWhiteSpace": addWhiteSpace,
+				"ConvertGRPCStatus": converGRPCStatus,
 			}
 			return tmpl.Execute(os.Stdout, params)
 		},
@@ -187,6 +194,8 @@ func main() {
 	cmd.PersistentFlags().StringSliceVar(&services, "services", []string{},
 		"Comma separated list of the proto service names contained in the descriptor files. These must be fully qualified names, i.e. package_name.service_name")
 	cmd.PersistentFlags().StringVarP(&descriptorFilePath, "descriptor", "d", "", "Location of proto descriptor files relative to the server.")
+	cmd.PersistentFlags().BoolVarP(&addWhiteSpace, "add_whitespace", "w", true, "JSON pretty print.")
+	cmd.PersistentFlags().BoolVarP(&converGRPCStatus, "convert_grpc_status", "c", true, "Convert gRPC status to JSON.")
 
 	if err := cmd.Execute(); err != nil {
 		log.Fatal(err)
