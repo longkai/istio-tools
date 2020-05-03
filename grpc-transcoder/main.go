@@ -40,23 +40,38 @@ kind: EnvoyFilter
 metadata:
   name: {{ .ServiceName }}
 spec:
-  workloadLabels:
-    app: {{ .ServiceName }}
-  filters:
-  - listenerMatch:
+  workloadSelector:
+    labels:
+      app: {{ .ServiceName }}
+  configPatches:
+    # The first patch adds the lua filter to the listener/http connection manager
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
       portNumber: {{ .PortNumber }}
-      listenerType: SIDECAR_INBOUND
-    insertPosition:
-      index: BEFORE
-      relativeTo: envoy.router
-    filterName: envoy.grpc_json_transcoder
-    filterType: HTTP
-    filterConfig:
-      services: {{ range .ProtoServices }} 
-      - {{ . }}{{end}}
-      protoDescriptorBin: {{ .DescriptorBinary }}
-      printOptions:
-        alwaysPrintPrimitiveFields: True
+      listener:
+        filterChain:
+          filter:
+            name: envoy.http_connection_manager
+            subFilter:
+              name: envoy.router
+    patch:
+      operation: INSERT_BEFORE
+      value: # grpc-json filter specification
+        name: envoy.grpc_json_transcoder
+        typed_config:
+          "@type": type.googleapis.com/envoy.config.filter.http.transcoder.v2.GrpcJsonTranscoder
+          proto_descriptor_bin: {{ .DescriptorBinary }}
+          services: {{ range .ProtoServices }}
+          - {{ . }}{{end}}
+          ignore_unknown_query_parameters: true
+          convert_grpc_status: true
+          auto_mapping: true
+          print_options:
+            add_whitespace: true
+            always_print_primitive_fields: true
+            always_print_enums_as_ints: false
+            preserve_proto_field_names: false
 ---
 `))
 
