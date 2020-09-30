@@ -44,23 +44,23 @@ spec:
     labels:
       app: {{ .ServiceName }}
   configPatches:
-    # The first patch adds the lua filter to the listener/http connection manager
+    # The first patch adds the grpc_json_transcoder filter to the listener/http connection manager
   - applyTo: HTTP_FILTER
     match:
       context: SIDECAR_INBOUND
-      portNumber: {{ .PortNumber }}
       listener:
+        portNumber: {{ .PortNumber }}
         filterChain:
           filter:
-            name: envoy.http_connection_manager
+            name: envoy.filters.network.http_connection_manager
             subFilter:
-              name: envoy.router
+              name: envoy.filters.http.router
     patch:
       operation: INSERT_BEFORE
       value: # grpc-json filter specification
-        name: envoy.grpc_json_transcoder
-        typed_config: # https://www.envoyproxy.io/docs/envoy/latest/api-v2/config/filter/http/transcoder/v2/transcoder.proto#envoy-api-msg-config-filter-http-transcoder-v2-grpcjsontranscoder
-          "@type": type.googleapis.com/envoy.config.filter.http.transcoder.v2.GrpcJsonTranscoder
+        name: envoy.filters.http.grpc_json_transcoder
+        typed_config: # https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/grpc_json_transcoder_filter#config-http-filters-grpc-json-transcoder
+          "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
           # proto_descriptor: where envoy sidecar could locate this file.
           proto_descriptor_bin: {{ .DescriptorBinary }}
           services: {{ range .ProtoServices }}
@@ -144,7 +144,7 @@ func main() {
 		descriptorFilePath string
 		port               int
 		addWhiteSpace      bool
-		converGRPCStatus bool
+		converGRPCStatus   bool
 	)
 
 	cmd := &cobra.Command{
@@ -175,11 +175,11 @@ func main() {
 
 			encoded := base64.StdEncoding.EncodeToString(descriptorBytes)
 			params := map[string]interface{}{
-				"ServiceName":      service,
-				"PortNumber":       port,
-				"DescriptorBinary": encoded,
-				"ProtoServices":    protoServices,
-				"AddWhiteSpace": addWhiteSpace,
+				"ServiceName":       service,
+				"PortNumber":        port,
+				"DescriptorBinary":  encoded,
+				"ProtoServices":     protoServices,
+				"AddWhiteSpace":     addWhiteSpace,
 				"ConvertGRPCStatus": converGRPCStatus,
 			}
 			return tmpl.Execute(os.Stdout, params)
